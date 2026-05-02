@@ -365,19 +365,41 @@
   ::-webkit-scrollbar-track { background: var(--darker); }
   ::-webkit-scrollbar-thumb { background: var(--neon); border-radius: 2px; }
 
-  @media (max-width: 900px) {
-    nav { padding: 1rem 1.5rem; }
-    .nav-links { display: none; }
-    #about { grid-template-columns: 1fr; padding: 5rem 1.5rem; }
-    .about-visual { height: 280px; }
-    #features { padding: 5rem 1.5rem; }
-    .features-grid { grid-template-columns: 1fr; }
-    #portfolio { padding: 5rem 1.5rem; }
-    .portfolio-grid { grid-template-columns: 1fr; }
-    .proj-card:nth-child(n) { grid-column: 1; grid-row: auto; }
-    footer { grid-template-columns: 1fr 1fr; gap: 2rem; padding: 3rem 1.5rem 1.5rem; }
-    .cta-form { flex-direction: column; border: none; gap: 0.5rem; }
-    .cta-input { border: 1px solid var(--border); }
+  .modal {
+    position: fixed; inset: 0; z-index: 1000;
+    background: rgba(5,8,16,0.95); backdrop-filter: blur(20px);
+    display: flex; align-items: center; justify-content: center;
+    opacity: 0; visibility: hidden; transition: opacity 0.3s, visibility 0.3s;
+  }
+  .modal.active { opacity: 1; visibility: visible; }
+  .modal-content {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 8px; padding: 2rem; max-width: 600px; width: 90%;
+    position: relative; transform: scale(0.9); transition: transform 0.3s;
+  }
+  .modal.active .modal-content { transform: scale(1); }
+  .modal-close {
+    position: absolute; top: 1rem; right: 1rem;
+    background: none; border: none; color: var(--text);
+    font-size: 1.5rem; cursor: pointer; width: 30px; height: 30px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .modal-close:hover { color: var(--neon); }
+  .modal-title {
+    font-family: 'Orbitron', monospace; font-size: 1.5rem; margin-bottom: 1rem;
+  }
+  .modal-desc { color: var(--muted); line-height: 1.8; margin-bottom: 1.5rem; }
+  .modal-tech { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 1.5rem; }
+  .tech-tag {
+    background: rgba(0,212,255,0.1); color: var(--neon);
+    padding: 0.25rem 0.75rem; border-radius: 12px; font-size: 0.75rem;
+    font-family: 'Orbitron', monospace; letter-spacing: 0.1em;
+  }
+  .modal-link {
+    font-family: 'Orbitron', monospace; font-size: 0.8rem;
+    background: var(--neon); color: var(--dark); border: none;
+    padding: 0.75rem 1.5rem; cursor: pointer; text-transform: uppercase;
+    letter-spacing: 0.1em;
   }
 </style>
 </head>
@@ -637,6 +659,17 @@
   <span style="font-family:'Orbitron',monospace;font-size:0.65rem;letter-spacing:0.2em;color:var(--neon)">SYSTEM ONLINE ◈</span>
 </div>
 
+<!-- MODAL -->
+<div id="project-modal" class="modal">
+  <div class="modal-content">
+    <button class="modal-close" id="modal-close">&times;</button>
+    <h3 class="modal-title" id="modal-title"></h3>
+    <p class="modal-desc" id="modal-desc"></p>
+    <div class="modal-tech" id="modal-tech"></div>
+    <button class="modal-link" id="modal-link">View Project →</button>
+  </div>
+</div>
+
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
 const cursor = document.getElementById('cursor');
@@ -709,10 +742,24 @@ document.querySelectorAll('a,button,.feat-card,.proj-card').forEach(el => {
   const pMat = new THREE.PointsMaterial({ color: 0x00d4ff, size: 0.025, transparent: true, opacity: 0.4 });
   scene.add(new THREE.Points(pGeo, pMat));
 
+  // Mouse trail particles
+  const trailGeo = new THREE.BufferGeometry();
+  const trailCount = 50;
+  const trailPos = new Float32Array(trailCount * 3);
+  for (let i = 0; i < trailCount * 3; i++) trailPos[i] = 0;
+  trailGeo.setAttribute('position', new THREE.BufferAttribute(trailPos, 3));
+  const trailMat = new THREE.PointsMaterial({ color: 0x7b2fff, size: 0.03, transparent: true, opacity: 0.6 });
+  const trail = new THREE.Points(trailGeo, trailMat);
+  scene.add(trail);
+  const trailPositions = [];
+  for (let i = 0; i < trailCount; i++) trailPositions.push(new THREE.Vector3());
+
   let mouseX = 0, mouseY = 0;
   document.addEventListener('mousemove', e => {
     mouseX = (e.clientX / window.innerWidth - 0.5) * 2;
     mouseY = (e.clientY / window.innerHeight - 0.5) * 2;
+    trailPositions.unshift(new THREE.Vector3(mouseX * 5, -mouseY * 3, 2));
+    if (trailPositions.length > trailCount) trailPositions.pop();
   });
 
   let t = 0;
@@ -728,6 +775,17 @@ document.querySelectorAll('a,button,.feat-card,.proj-card').forEach(el => {
     camera.position.x += (mouseX * 0.5 - camera.position.x) * 0.05;
     camera.position.y += (-mouseY * 0.3 - camera.position.y) * 0.05;
     camera.lookAt(0, 0, 0);
+
+    // Update trail
+    const positions = trailGeo.attributes.position.array;
+    for (let i = 0; i < trailCount; i++) {
+      const pos = trailPositions[i] || new THREE.Vector3();
+      positions[i * 3] = pos.x;
+      positions[i * 3 + 1] = pos.y;
+      positions[i * 3 + 2] = pos.z;
+    }
+    trailGeo.attributes.position.needsUpdate = true;
+
     renderer.render(scene, camera);
   })();
 
@@ -873,6 +931,80 @@ document.querySelectorAll('.proj-canvas').forEach((canvas, idx) => {
     renderer.render(scene, camera);
   })();
 })();
+
+document.querySelector('.nav-cta').addEventListener('click', () => {
+  document.getElementById('cta').scrollIntoView({ behavior: 'smooth' });
+});
+
+document.querySelector('.btn-primary').addEventListener('click', () => {
+  document.getElementById('about').scrollIntoView({ behavior: 'smooth' });
+});
+
+document.querySelector('.btn-outline').addEventListener('click', () => {
+  alert('Manifesto: We believe in pushing the boundaries of digital experience. Every pixel matters. Every interaction counts.');
+});
+
+document.querySelector('.cta-submit').addEventListener('click', (e) => {
+  e.preventDefault();
+  const email = document.querySelector('.cta-input').value;
+  if (email) {
+    alert(`Thank you! We'll contact ${email} soon.`);
+    document.querySelector('.cta-input').value = '';
+  } else {
+    alert('Please enter your email.');
+  }
+});
+
+// ─── PROJECT MODAL ───────────────────────────────────────
+const modal = document.getElementById('project-modal');
+const modalTitle = document.getElementById('modal-title');
+const modalDesc = document.getElementById('modal-desc');
+const modalTech = document.getElementById('modal-tech');
+const modalLink = document.getElementById('modal-link');
+const modalClose = document.getElementById('modal-close');
+
+const projects = [
+  {
+    name: 'AETHER PLATFORM',
+    desc: 'A cutting-edge WebGL platform for immersive data visualization. Built with Three.js and custom shaders for real-time rendering of complex datasets.',
+    tech: ['WebGL', 'Three.js', 'React', 'Node.js'],
+    link: '#'
+  },
+  {
+    name: 'VORTEX STUDIO',
+    desc: 'Interactive 3D design studio with collaborative features. Enables real-time collaboration on 3D models with WebRTC and advanced physics simulations.',
+    tech: ['Three.js', 'WebRTC', 'Socket.io', 'Express'],
+    link: '#'
+  },
+  {
+    name: 'LUMINARY OS',
+    desc: 'Motion-driven operating system interface with fluid animations. Features gesture recognition and AI-powered workflow optimization.',
+    tech: ['JavaScript', 'CSS Animations', 'TensorFlow.js', 'Electron'],
+    link: '#'
+  },
+  {
+    name: 'NEURAL FORGE',
+    desc: 'AI-powered dashboard for machine learning model training and deployment. Real-time monitoring with predictive analytics and automated scaling.',
+    tech: ['Python', 'TensorFlow', 'React', 'Kubernetes'],
+    link: '#'
+  }
+];
+
+document.querySelectorAll('.proj-card').forEach((card, idx) => {
+  card.addEventListener('click', () => {
+    const proj = projects[idx];
+    modalTitle.textContent = proj.name;
+    modalDesc.textContent = proj.desc;
+    modalTech.innerHTML = proj.tech.map(t => `<span class="tech-tag">${t}</span>`).join('');
+    modalLink.onclick = () => window.open(proj.link, '_blank');
+    modal.classList.add('active');
+  });
+});
+
+modalClose.addEventListener('click', () => modal.classList.remove('active'));
+modal.addEventListener('click', (e) => {
+  if (e.target === modal) modal.classList.remove('active');
+});
 
 // ─── INTERSECTION OBSERVER ─────────────────────────────────
 const obs = new IntersectionObserver((entries) => {
